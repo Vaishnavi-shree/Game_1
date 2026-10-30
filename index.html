@@ -59,8 +59,8 @@ canvas{display:block}
    <div id="status">READY TO RACE</div>
   </div>
   <div class="panel">
-   SCORE: <span id="score">1000</span><br>
-   LAP: <span id="lap">1</span><br>
+   SCORE: <span id="score">0</span><br>
+   LAP: <span id="lap">1</span>/3<br>COINS: <span id="wallet">0</span> · LEVEL: <span id="level">1</span><br>
    DISTANCE: <span id="distance">0</span> m<br>
    NITRO: <span id="nitro">100</span>%
   </div>
@@ -92,6 +92,36 @@ canvas{display:block}
  </div>
 </div>
 
+<div id="careerOverlay" class="career-overlay">
+ <div class="career-card">
+  <h1>🏎️ WONDER CAR</h1>
+  <p id="careerSubtitle">Rise of the Legend · Hard Mode · 3 Laps</p>
+  <div id="careerStats"></div>
+  <div id="careerContent"></div>
+  <div class="career-buttons">
+   <button id="playRace">▶ PLAY RACE</button>
+   <button id="garageBtn">🚘 GARAGE</button>
+   <button id="missionsBtn">🎯 MISSIONS</button>
+   <button id="achieveBtn">🏆 ACHIEVEMENTS</button>
+  </div>
+ </div>
+</div>
+
+<style>
+.career-overlay{position:fixed;inset:0;z-index:30;background:linear-gradient(135deg,#020816ed,#091e39ed);display:none;align-items:center;justify-content:center;padding:16px;color:white;font-family:Arial,sans-serif}
+.career-card{width:min(660px,100%);max-height:92vh;overflow:auto;background:#071629;border:1px solid #24cafa88;border-radius:20px;padding:22px;box-shadow:0 0 45px #0085c033;text-align:center}
+.career-card h1{color:#52e6ff;margin:0 0 9px}
+.career-card p{color:#b7d9e5}
+.career-buttons{display:flex;flex-wrap:wrap;gap:9px;justify-content:center;margin-top:15px}
+.career-buttons button,.career-buy{background:#0c3952;color:white;border:1px solid #39dafa;border-radius:9px;padding:12px;cursor:pointer;font-weight:bold}
+.career-buttons button:hover,.career-buy:hover{background:#176789}
+.career-buy:disabled{opacity:.45;cursor:not-allowed}
+.career-row{background:#10243b;border:1px solid #1d4560;border-radius:11px;padding:12px;margin:9px 0;text-align:left}
+.career-row small{color:#b4d1e2}
+.career-row strong{color:#5ce6ff}
+.career-badge{color:#ffdc75}
+</style>
+
 <script type="module">
 import * as THREE from
 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
@@ -111,11 +141,14 @@ const loadingMessages=[
 ];
 
 const loadingStart=performance.now();
+
 function updateLoading(){
  const elapsed=(performance.now()-loadingStart)/1000;
  const progress=Math.min(1,elapsed/10);
+
  document.getElementById('loadingBar').style.width=(progress*100)+'%';
  document.getElementById('loadingPercent').textContent=Math.floor(progress*100)+'%';
+
  const index=Math.min(9,Math.floor(progress*10));
  document.getElementById('loadingText').textContent=loadingMessages[index];
 
@@ -124,22 +157,24 @@ function updateLoading(){
  }else{
   document.getElementById('loading').style.transition='opacity .8s';
   document.getElementById('loading').style.opacity='0';
+
   setTimeout(()=>{
    document.getElementById('loading').style.display='none';
    document.getElementById('gameUI').style.display='block';
    document.getElementById('message').textContent='GO! GO! GO!';
    document.getElementById('message').style.opacity='1';
    setTimeout(()=>document.getElementById('message').style.opacity='0',1800);
+   document.getElementById('careerOverlay').style.display='flex';
    startGame();
   },800);
  }
 }
+
 updateLoading();
 
 // ================ GAME START FUNCTION ================
 function startGame(){
-
-// ================ THREE.JS SCENE ================
+    // ================ THREE.JS SCENE ================
 const scene=new THREE.Scene();
 scene.background=new THREE.Color(0x07111e);
 scene.fog=new THREE.Fog(0x07111e,110,400);
@@ -192,32 +227,42 @@ for(let i=0;i<SEGMENTS;i++){
 
 function trackPosition(t,offset=0){
  const a=t*Math.PI*2;
+
  const p=new THREE.Vector3(
   Math.cos(a)*TRACK_A,0,Math.sin(a)*TRACK_B
  );
+
  const tangent=new THREE.Vector3(
   -Math.sin(a)*TRACK_A,0,Math.cos(a)*TRACK_B
  ).normalize();
+
  const side=new THREE.Vector3(-tangent.z,0,tangent.x);
  p.addScaledVector(side,offset);
+
  return {position:p,tangent,side};
 }
 
 // Road surface
 const vertices=[],indices=[];
+
 for(let i=0;i<=SEGMENTS;i++){
  const p=trackPoints[i%SEGMENTS];
  const next=trackPoints[(i+1)%SEGMENTS];
+
  const tangent=new THREE.Vector3().subVectors(next,p).normalize();
  const side=new THREE.Vector3(-tangent.z,0,tangent.x);
+
  const left=p.clone().addScaledVector(side,ROAD_WIDTH/2);
  const right=p.clone().addScaledVector(side,-ROAD_WIDTH/2);
+
  vertices.push(left.x,.02,left.z,right.x,.02,right.z);
+
  if(i<SEGMENTS){
   const n=i*2;
   indices.push(n,n+1,n+2,n+1,n+3,n+2);
  }
 }
+
 const roadGeo=new THREE.BufferGeometry();
 roadGeo.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));
 roadGeo.setIndex(indices);
@@ -226,16 +271,20 @@ roadGeo.computeVertexNormals();
 const road=new THREE.Mesh(roadGeo,new THREE.MeshStandardMaterial({
  color:0x252c35,roughness:.85,side:THREE.DoubleSide
 }));
+
 road.receiveShadow=true;
 scene.add(road);
 
 // Road borders
 for(const side of [-1,1]){
  const points=[];
+
  for(let i=0;i<=SEGMENTS;i++){
   points.push(trackPosition(i/SEGMENTS,side*(ROAD_WIDTH/2+.8)).position);
  }
+
  const curve=new THREE.CatmullRomCurve3(points,true);
+
  const barrier=new THREE.Mesh(
   new THREE.TubeGeometry(curve,SEGMENTS*2,.5,8,true),
   new THREE.MeshStandardMaterial({
@@ -244,6 +293,7 @@ for(const side of [-1,1]){
    emissiveIntensity:1.5
   })
  );
+
  barrier.position.y=.55;
  scene.add(barrier);
 }
@@ -251,10 +301,12 @@ for(const side of [-1,1]){
 // Center lane markings
 for(let i=0;i<SEGMENTS;i+=5){
  const p=trackPoints[i],next=trackPoints[(i+1)%SEGMENTS];
+
  const dash=new THREE.Mesh(
   new THREE.BoxGeometry(.25,.04,2.1),
   new THREE.MeshStandardMaterial({color:0xdffaff})
  );
+
  dash.position.set(p.x,.07,p.z);
  dash.rotation.y=Math.atan2(next.x-p.x,next.z-p.z);
  scene.add(dash);
@@ -264,14 +316,17 @@ for(let i=0;i<SEGMENTS;i+=5){
 const buildingMat=new THREE.MeshStandardMaterial({
  color:0x17283c,metalness:.3,roughness:.7
 });
+
 for(let i=0;i<65;i++){
  const a=Math.random()*Math.PI*2;
  const r=100+Math.random()*65;
  const h=9+Math.random()*35;
+
  const building=new THREE.Mesh(
   new THREE.BoxGeometry(7+Math.random()*10,h,7+Math.random()*10),
   buildingMat
  );
+
  building.position.set(Math.cos(a)*r,h/2,Math.sin(a)*r);
  building.castShadow=true;
  scene.add(building);
@@ -281,670 +336,1233 @@ for(let i=0;i<65;i++){
 for(let i=0;i<48;i++){
  const p=trackPosition(i/48,ROAD_WIDTH/2+4);
  const pole=new THREE.Group();
+
  const post=new THREE.Mesh(
   new THREE.CylinderGeometry(.12,.16,5,8),
   new THREE.MeshStandardMaterial({color:0x38475b})
  );
+
  post.position.y=2.5;
  pole.add(post);
+
  const bulb=new THREE.Mesh(
-  new THREE.SphereGeometry(.3,12,12),
-  new THREE.MeshStandardMaterial({
-   color:0x00ddff,emissive:0x00bbff,emissiveIntensity:3
-  })
+  new THREE.SphereGeometry(.3,8,8),
+  new THREE.MeshBasicMaterial({color:0x42ddff})
  );
+
  bulb.position.y=5;
  pole.add(bulb);
+
+ const glow=new THREE.PointLight(0x25bfff,8,18);
+ glow.position.y=4.7;
+ pole.add(glow);
+
  pole.position.copy(p.position);
  scene.add(pole);
 }
-// ================ 3D SPORTS CAR ================
+// ================ PLAYER CAR ================
 const car=new THREE.Group();
-scene.add(car);
 
-const red=new THREE.MeshStandardMaterial({
- color:0xe50932,metalness:.85,roughness:.22
-});
-const dark=new THREE.MeshStandardMaterial({
- color:0x10151d,metalness:.65,roughness:.25
-});
-const glass=new THREE.MeshPhysicalMaterial({
- color:0x102b42,metalness:.5,roughness:.08
-});
-const neon=new THREE.MeshStandardMaterial({
- color:0x00eaff,emissive:0x00aacc,emissiveIntensity:2
+const carBodyMat=new THREE.MeshStandardMaterial({
+ color:0xe51c42,metalness:.75,roughness:.22
 });
 
-function addBox(parent,w,h,d,mat,x,y,z){
- const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);
- m.position.set(x,y,z);
- m.castShadow=true;
- m.receiveShadow=true;
- parent.add(m);
- return m;
-}
-
-// Main body and cabin
-addBox(car,2.35,.55,4.5,red,0,.75,0);
-addBox(car,2.15,.28,1.25,red,0,1.02,1.45);
-addBox(car,2.15,.30,.9,red,0,1.02,-1.65);
-addBox(car,1.75,.75,2.05,glass,0,1.35,-.05);
-addBox(car,1.65,.12,1,dark,0,1.75,-.1);
-
-// Bumpers and spoiler
-addBox(car,2.55,.12,.35,dark,0,.48,2.25);
-addBox(car,2.5,.2,.35,dark,0,.55,-2.25);
-addBox(car,2.5,.13,.3,dark,0,1.55,-2);
-addBox(car,.12,.48,.12,dark,-.85,1.3,-2);
-addBox(car,.12,.48,.12,dark,.85,1.3,-2);
-
-// Headlights
-const headMat=new THREE.MeshStandardMaterial({
- color:0xffffff,emissive:0x8beeff,emissiveIntensity:3
-});
-const tailMat=new THREE.MeshStandardMaterial({
- color:0xff001c,emissive:0xff001c,emissiveIntensity:3
+const blackMat=new THREE.MeshStandardMaterial({
+ color:0x10151d,metalness:.5,roughness:.35
 });
 
-for(const x of [-.78,.78]){
- addBox(car,.52,.13,.12,headMat,x,.92,2.18);
- const beam=new THREE.PointLight(0x8beeff,8,14);
- beam.position.set(x,1,2.5);
- car.add(beam);
-}
-addBox(car,1.9,.13,.1,tailMat,0,.92,-2.28);
+const glassMat=new THREE.MeshPhysicalMaterial({
+ color:0x071d2b,metalness:.3,roughness:.1,transparent:true,opacity:.9
+});
 
-// Neon side strips
-for(const x of [-1.18,1.18]){
- addBox(car,.06,.09,3.3,neon,x,.55,0);
-}
-const underGlow=new THREE.PointLight(0x00cfff,12,7);
-underGlow.position.set(0,.2,0);
-car.add(underGlow);
+const body=new THREE.Mesh(
+ new THREE.BoxGeometry(2.1,.65,4.2),
+ carBodyMat
+);
+body.position.y=.85;
+body.castShadow=true;
+car.add(body);
+
+const hood=new THREE.Mesh(
+ new THREE.BoxGeometry(1.9,.18,1.1),
+ carBodyMat
+);
+hood.position.set(0,1.2,1.15);
+car.add(hood);
+
+const cabin=new THREE.Mesh(
+ new THREE.BoxGeometry(1.55,.85,1.8),
+ glassMat
+);
+cabin.position.set(0,1.5,-.15);
+car.add(cabin);
+
+const roof=new THREE.Mesh(
+ new THREE.BoxGeometry(1.5,.13,1.5),
+ blackMat
+);
+roof.position.set(0,1.95,-.2);
+car.add(roof);
+
+// Front bumper
+const bumper=new THREE.Mesh(
+ new THREE.BoxGeometry(2.15,.25,.3),
+ blackMat
+);
+bumper.position.set(0,.55,2.05);
+car.add(bumper);
+
+// Rear spoiler
+const spoiler=new THREE.Mesh(
+ new THREE.BoxGeometry(2.3,.12,.45),
+ blackMat
+);
+spoiler.position.set(0,1.7,-1.95);
+car.add(spoiler);
 
 // Wheels
 const wheels=[];
-const tireMat=new THREE.MeshStandardMaterial({color:0x090b10});
-const rimMat=new THREE.MeshStandardMaterial({
- color:0xb9d4df,metalness:.9,roughness:.2
-});
 
-for(const x of [-1.22,1.22]){
- for(const z of [-1.45,1.45]){
-  const wheel=new THREE.Group();
-  wheel.position.set(x,.55,z);
-
-  const tire=new THREE.Mesh(
-   new THREE.CylinderGeometry(.43,.43,.28,24),tireMat
+for(const x of [-1.08,1.08]){
+ for(const z of [-1.35,1.35]){
+  const wheel=new THREE.Mesh(
+   new THREE.CylinderGeometry(.43,.43,.32,24),
+   new THREE.MeshStandardMaterial({
+    color:0x080b10,roughness:.9
+   })
   );
-  tire.rotation.z=Math.PI/2;
-  tire.castShadow=true;
-  wheel.add(tire);
 
-  const rim=new THREE.Mesh(
-   new THREE.CylinderGeometry(.24,.24,.3,16),rimMat
-  );
-  rim.rotation.z=Math.PI/2;
-  wheel.add(rim);
-
+  wheel.rotation.z=Math.PI/2;
+  wheel.position.set(x,.5,z);
+  wheel.castShadow=true;
   car.add(wheel);
   wheels.push(wheel);
+
+  const rim=new THREE.Mesh(
+   new THREE.CylinderGeometry(.22,.22,.34,16),
+   new THREE.MeshStandardMaterial({
+    color:0x9bc9d8,metalness:.9,roughness:.2
+   })
+  );
+
+  rim.rotation.z=Math.PI/2;
+  rim.position.set(x,.5,z);
+  car.add(rim);
  }
 }
 
-// ================ GAME STATE ================
-const state={
- progress:0,lateral:0,speed:0,maxSpeed:65,
- steer:0,jumpHeight:0,jumpVelocity:0,
- jumping:false,nitro:100,distance:0,lap:1,
- score:1000,crashes:0
-};
+// Headlights
+for(const x of [-.7,.7]){
+ const light=new THREE.Mesh(
+  new THREE.BoxGeometry(.42,.18,.08),
+  new THREE.MeshBasicMaterial({color:0x9ef5ff})
+ );
 
-const input={
- left:false,right:false,accelerate:false,
- brake:false,jump:false,nitro:false
-};
+ light.position.set(x,1.05,2.12);
+ car.add(light);
 
-const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const lerp=(a,b,t)=>a+(b-a)*t;
+ const beam=new THREE.SpotLight(0x9eeeff,30,50,Math.PI/7,.5,1);
+ beam.position.set(x,1.2,2.1);
+ beam.target.position.set(x,.2,18);
+ car.add(beam);
+ car.add(beam.target);
+}
 
-// ================ KEYBOARD CONTROLS ================
-const keyMap={
- ArrowLeft:'left',KeyA:'left',
- ArrowRight:'right',KeyD:'right',
- ArrowUp:'accelerate',KeyW:'accelerate',
- ArrowDown:'brake',KeyS:'brake',
- Space:'jump',ShiftLeft:'nitro',ShiftRight:'nitro'
-};
+// Nitro exhaust
+for(const x of [-.65,.65]){
+ const exhaust=new THREE.Mesh(
+  new THREE.CylinderGeometry(.15,.21,.45,12),
+  new THREE.MeshStandardMaterial({
+   color:0x333d48,metalness:.8
+  })
+ );
 
-window.addEventListener('keydown',e=>{
- const k=keyMap[e.code];
- if(k){e.preventDefault();input[k]=true;}
-});
-window.addEventListener('keyup',e=>{
- const k=keyMap[e.code];
- if(k){e.preventDefault();input[k]=false;}
-});
-window.addEventListener('blur',()=>{
- Object.keys(input).forEach(k=>input[k]=false);
-});
+ exhaust.rotation.x=Math.PI/2;
+ exhaust.position.set(x,.65,-2.2);
+ car.add(exhaust);
+}
 
-// Mobile touch controls
-document.querySelectorAll('[data-key]').forEach(btn=>{
- const key=btn.dataset.key;
- const down=e=>{
-  e.preventDefault();
-  input[key]=true;
-  btn.setPointerCapture?.(e.pointerId);
- };
- const up=e=>{
-  e.preventDefault();
-  input[key]=false;
- };
- btn.addEventListener('pointerdown',down);
- btn.addEventListener('pointerup',up);
- btn.addEventListener('pointercancel',up);
- btn.addEventListener('lostpointercapture',up);
-});
+scene.add(car);
 
-// ================ OBSTACLE CREATION ================
+// ================ CAR COLLECTION ================
+const carCollection=[
+ {id:"starter",name:"Street Beast",price:0,level:1,color:0xe51c42,description:"Your first racing machine"},
+ {id:"blue",name:"Blue Thunder",price:1200,level:3,color:0x168cff,description:"Fast and stylish"},
+ {id:"purple",name:"Shadow X",price:3000,level:7,color:0x912cff,description:"Dark racing legend"},
+ {id:"green",name:"Venom GT",price:6000,level:12,color:0x16d77a,description:"A powerful beast"},
+ {id:"gold",name:"Golden Legend",price:12000,level:20,color:0xffc629,description:"The ultimate legendary car"}
+];
+
+function applyCarColor(){
+ const selected=carCollection.find(x=>x.id===career.selectedCar);
+ if(selected) carBodyMat.color.setHex(selected.color);
+}
+
+// ================ RAMPS ================
+const ramps=[];
+
+for(let i=0;i<5;i++){
+ const p=trackPosition(.12+i*.18,0);
+
+ const ramp=new THREE.Mesh(
+  new THREE.BoxGeometry(5,.5,7),
+  new THREE.MeshStandardMaterial({
+   color:0x00cfff,
+   emissive:0x005577,
+   emissiveIntensity:1
+  })
+ );
+
+ ramp.position.copy(p.position);
+ ramp.position.y=.35;
+ ramp.rotation.y=Math.atan2(p.tangent.x,p.tangent.z);
+ scene.add(ramp);
+ ramps.push({mesh:ramp,position:p.position.clone(),used:false});
+}
+
+// ================ OBSTACLES ================
 const obstacles=[];
-const obstacleMaterials={
- orange:new THREE.MeshStandardMaterial({color:0xff681c}),
- yellow:new THREE.MeshStandardMaterial({color:0xffd42a}),
- wood:new THREE.MeshStandardMaterial({color:0x89532b}),
- red:new THREE.MeshStandardMaterial({color:0xff163e,emissive:0x550011})
-};
+const obstacleColors=[0xff3157,0xffa323,0xa82dff];
 
-function createObstacle(type,progress,lane){
- const group=new THREE.Group();
+for(let i=0;i<12;i++){
+ const p=trackPosition(i/12+.04,(i%2===0)?-3:3);
 
- if(type==='cone'){
-  const cone=new THREE.Mesh(
-   new THREE.ConeGeometry(.65,1.7,12),obstacleMaterials.orange
-  );
-  cone.position.y=.85;
-  cone.castShadow=true;
-  group.add(cone);
-  addBox(group,1.3,.15,1.3,obstacleMaterials.yellow,0,.08,0);
- }
- else if(type==='box'){
-  addBox(group,2.3,1.8,2,obstacleMaterials.wood,0,.9,0);
-  addBox(group,2.35,.2,2.05,obstacleMaterials.yellow,0,1.1,0);
- }
- else{
-  addBox(group,5,1.4,.8,obstacleMaterials.red,0,.7,0);
-  for(let i=-1;i<=1;i++){
-   addBox(group,.35,1.45,.85,obstacleMaterials.yellow,i*1.4,.7,0);
-  }
- }
+ const obj=new THREE.Group();
 
- const p=trackPosition(progress,lane);
- group.position.copy(p.position);
- group.rotation.y=Math.atan2(p.tangent.x,p.tangent.z);
- scene.add(group);
+ const block=new THREE.Mesh(
+  new THREE.BoxGeometry(2.3,1.6,2),
+  new THREE.MeshStandardMaterial({
+   color:obstacleColors[i%3],
+   emissive:obstacleColors[i%3],
+   emissiveIntensity:.3
+  })
+ );
+
+ block.position.y=.8;
+ obj.add(block);
+ obj.position.copy(p.position);
+ scene.add(obj);
+
  obstacles.push({
-  mesh:group,progress,lane,type,hitLap:-1
+  mesh:obj,
+  position:p.position.clone(),
+  hit:false
  });
 }
 
-// Only 12 obstacles, with large gaps for jumping time.
-const obstacleTypes=['cone','box','barrier'];
-for(let i=0;i<12;i++){
- const progress=(.045+i*.082)%1;
- const lane=i%3===0?-4:i%3===1?4:0;
- createObstacle(obstacleTypes[i%3],progress,lane);
+// ================ RAIN PARTICLES ================
+const rainCount=1400;
+const rainPositions=new Float32Array(rainCount*3);
+
+for(let i=0;i<rainCount;i++){
+ rainPositions[i*3]=(Math.random()-.5)*180;
+ rainPositions[i*3+1]=Math.random()*45;
+ rainPositions[i*3+2]=(Math.random()-.5)*180;
 }
 
-// ================ JUMP RAMPS ================
-const ramps=[];
-for(let i=0;i<5;i++){
- const progress=.10+i*.18;
- const p=trackPosition(progress,0);
- const ramp=new THREE.Mesh(
-  new THREE.BoxGeometry(7,.7,5),
-  new THREE.MeshStandardMaterial({
-   color:0x00bde9,metalness:.7,roughness:.3,
-   emissive:0x004466
-  })
- );
- ramp.position.copy(p.position);
- ramp.position.y=.45;
- ramp.rotation.y=Math.atan2(p.tangent.x,p.tangent.z);
- ramp.rotation.x=-.15;
- ramp.castShadow=true;
- scene.add(ramp);
- ramps.push({progress,mesh:ramp});
-}
+const rainGeo=new THREE.BufferGeometry();
+rainGeo.setAttribute(
+ 'position',
+ new THREE.BufferAttribute(rainPositions,3)
+);
 
-// ================ SCORE SYSTEM ================
-function deductPoints(amount){
- state.score=Math.max(0,state.score-amount);
- state.crashes++;
- document.getElementById('score').textContent=state.score;
- showMessage(`CRASH! -${amount} POINTS`);
-}
+const rain=new THREE.Points(
+ rainGeo,
+ new THREE.PointsMaterial({
+  color:0x9fdfff,
+  size:.13,
+  transparent:true,
+  opacity:.6
+ })
+);
 
-let messageTimer=null;
-function showMessage(text){
- const el=document.getElementById('message');
- el.textContent=text;
- el.style.opacity='1';
- clearTimeout(messageTimer);
- messageTimer=setTimeout(()=>el.style.opacity='0',1400);
-}
+scene.add(rain);
+// ================ CAREER SYSTEM ================
+const SAVE_KEY="wonder_car_career_v1";
 
-// ================ ORIGINAL RACING MUSIC ================
-let audioContext=null;
-let masterGain=null;
-let musicEnabled=false;
-let musicTimer=null;
-let engineOsc=null;
-let engineGain=null;
-let musicStep=0;
+const defaultCareer={
+ coins:0,
+ xp:0,
+ level:1,
+ totalRaces:0,
+ totalWins:0,
+ totalJumps:0,
+ totalObstacles:0,
+ totalDistance:0,
+ cleanRaces:0,
+ bestScore:0,
+ selectedCar:"starter",
+ unlockedCars:["starter"],
+ achievements:[],
+ missions:{},
+ dailyDate:"",
+ dailyClaimed:false
+};
 
-function initAudio(){
- if(audioContext){
-  audioContext.resume();
-  return;
+function loadCareer(){
+ try{
+  const saved=JSON.parse(localStorage.getItem(SAVE_KEY));
+  return {...defaultCareer,...saved};
+ }catch(error){
+  return {...defaultCareer};
  }
- const AC=window.AudioContext||window.webkitAudioContext;
- if(!AC)return;
-
- audioContext=new AC();
- masterGain=audioContext.createGain();
- masterGain.gain.value=.4;
- masterGain.connect(audioContext.destination);
-
- engineOsc=audioContext.createOscillator();
- engineOsc.type='sawtooth';
- engineGain=audioContext.createGain();
- engineGain.gain.value=.0001;
- engineOsc.connect(engineGain);
- engineGain.connect(masterGain);
- engineOsc.start();
 }
 
-const melody=[
- 261.63,329.63,392,440,392,329.63,
- 293.66,349.23,440,523.25,440,392,
- 349.23,392,440,523.25,587.33,523.25,
- 440,392,329.63,392,440,523.25
+let career=loadCareer();
+
+function saveCareer(){
+ localStorage.setItem(SAVE_KEY,JSON.stringify(career));
+ updateCareerStats();
+}
+
+function addCoins(amount){
+ career.coins+=Math.max(0,Math.floor(amount));
+ saveCareer();
+}
+
+function addXP(amount){
+ career.xp+=Math.max(0,Math.floor(amount));
+
+ while(career.xp>=career.level*500){
+  career.xp-=career.level*500;
+  career.level++;
+  showMessage("LEVEL UP! LEVEL "+career.level);
+ }
+
+ saveCareer();
+}
+
+function updateCareerStats(){
+ const box=document.getElementById("careerStats");
+
+ if(!box)return;
+
+ box.innerHTML=`
+  <div class="career-row">
+   <strong>🪙 ${career.coins}</strong> Coins
+   &nbsp; | &nbsp;
+   <strong>⭐ ${career.xp}</strong> XP
+   &nbsp; | &nbsp;
+   <strong>LEVEL ${career.level}</strong>
+  </div>
+  <div class="career-row">
+   Total Races: ${career.totalRaces}<br>
+   Race Wins: ${career.totalWins}<br>
+   Best Score: ${career.bestScore}
+  </div>
+ `;
+
+ document.getElementById("wallet").textContent=career.coins;
+ document.getElementById("level").textContent=career.level;
+}
+
+function showMessage(text){
+ const el=document.getElementById("message");
+ el.textContent=text;
+ el.style.opacity="1";
+
+ clearTimeout(showMessage.timer);
+
+ showMessage.timer=setTimeout(()=>{
+  el.style.opacity="0";
+ },1700);
+}
+
+// ================ DAILY LOGIN ================
+function checkDailyReward(){
+ const today=new Date().toDateString();
+
+ if(career.dailyDate!==today){
+  career.dailyDate=today;
+  career.dailyClaimed=false;
+  saveCareer();
+ }
+
+ if(!career.dailyClaimed){
+  career.dailyClaimed=true;
+  addCoins(50);
+  addXP(25);
+  showMessage("DAILY REWARD +50 COINS!");
+ }
+}
+
+// ================ MISSIONS ================
+const missionList=[
+ {
+  id:"race3",
+  name:"First Champion",
+  description:"Complete 3 races",
+  target:3,
+  reward:500,
+  xp:150
+ },
+ {
+  id:"jump20",
+  name:"Sky King",
+  description:"Perform 20 jumps",
+  target:20,
+  reward:400,
+  xp:100
+ },
+ {
+  id:"avoid50",
+  name:"Obstacle Master",
+  description:"Avoid 50 obstacles",
+  target:50,
+  reward:600,
+  xp:150
+ },
+ {
+  id:"distance5000",
+  name:"Road Explorer",
+  description:"Drive 5000 metres",
+  target:5000,
+  reward:750,
+  xp:200
+ },
+ {
+  id:"clean3",
+  name:"Perfect Driver",
+  description:"Complete 3 races without crashing",
+  target:3,
+  reward:1200,
+  xp:300
+ },
+ {
+  id:"score10000",
+  name:"Score Hunter",
+  description:"Reach 10000 score in a race",
+  target:10000,
+  reward:1000,
+  xp:250
+ }
 ];
 
-function playNote(freq,duration,volume,type='triangle'){
- if(!audioContext||!musicEnabled)return;
+function missionProgress(id){
+ switch(id){
+  case "race3":return career.totalRaces;
+  case "jump20":return career.totalJumps;
+  case "avoid50":return career.totalObstacles;
+  case "distance5000":return career.totalDistance;
+  case "clean3":return career.cleanRaces;
+  case "score10000":return career.bestScore;
+  default:return 0;
+ }
+}
 
- const osc=audioContext.createOscillator();
- const gain=audioContext.createGain();
- osc.type=type;
- osc.frequency.value=freq;
- gain.gain.setValueAtTime(volume,audioContext.currentTime);
- gain.gain.exponentialRampToValueAtTime(
-  .001,audioContext.currentTime+duration
+function checkMissions(){
+ career.missions=career.missions||{};
+
+ for(const m of missionList){
+  if(career.missions[m.id])continue;
+
+  if(missionProgress(m.id)>=m.target){
+   career.missions[m.id]=true;
+   addCoins(m.reward);
+   addXP(m.xp);
+   showMessage("MISSION COMPLETE: "+m.name);
+  }
+ }
+
+ saveCareer();
+}
+
+// ================ ACHIEVEMENTS ================
+const achievementList=[
+ {
+  id:"firstRace",
+  name:"First Finish",
+  description:"Complete your first race",
+  test:()=>career.totalRaces>=1,
+  reward:200
+ },
+ {
+  id:"untouchable",
+  name:"Untouchable",
+  description:"Complete 3 clean races",
+  test:()=>career.cleanRaces>=3,
+  reward:750
+ },
+ {
+  id:"jumpKing",
+  name:"Jump King",
+  description:"Perform 50 jumps",
+  test:()=>career.totalJumps>=50,
+  reward:500
+ },
+ {
+  id:"millionaire",
+  name:"Coin Hunter",
+  description:"Collect 10000 coins",
+  test:()=>career.coins>=10000,
+  reward:1000
+ },
+ {
+  id:"legend",
+  name:"Legend Reborn",
+  description:"Reach level 20",
+  test:()=>career.level>=20,
+  reward:2000
+ }
+];
+
+function checkAchievements(){
+ for(const a of achievementList){
+  if(career.achievements.includes(a.id))continue;
+
+  if(a.test()){
+   career.achievements.push(a.id);
+   addCoins(a.reward);
+   showMessage("🏆 ACHIEVEMENT: "+a.name);
+  }
+ }
+
+ saveCareer();
+}
+
+// ================ INITIAL CAREER ================
+updateCareerStats();
+applyCarColor();
+checkDailyReward();
+// ================ CAREER MENU ================
+
+const careerContent=document.getElementById("careerContent");
+
+function showCareerMenu(){
+ document.getElementById("careerOverlay").style.display="flex";
+ document.getElementById("gameUI").style.display="none";
+ document.getElementById("careerSubtitle").textContent=
+  "Rise of the Legend · Hard Mode · 3 Laps";
+
+ careerContent.innerHTML=`
+  <div class="career-row">
+   🏁 Complete 3 laps to finish one race.<br>
+   🪙 Earn coins and ⭐ XP to become a legend.
+  </div>
+  <div class="career-row">
+   <strong>Career Progress</strong><br>
+   Races: ${career.totalRaces}<br>
+   Wins: ${career.totalWins}<br>
+   Unlocked Cars: ${career.unlockedCars.length}/${carCollection.length}
+  </div>
+ `;
+ updateCareerStats();
+}
+
+function showGarage(){
+ let html="<h2>🚘 YOUR GARAGE</h2>";
+
+ for(const c of carCollection){
+  const unlocked=career.unlockedCars.includes(c.id);
+  const selected=career.selectedCar===c.id;
+
+  html+=`
+   <div class="career-row">
+    <strong>${c.name}</strong>
+    ${selected?"<span class='career-badge'> · SELECTED</span>":""}
+    <p><small>${c.description}</small></p>
+    <p><small>Required Level: ${c.level} | Price: ${c.price} coins</small></p>
+    <button class="career-buy"
+      ${selected||(!unlocked&&(career.coins<c.price||career.level<c.level))?"disabled":""}
+      onclick="window.selectCareerCar('${c.id}')">
+      ${selected?"SELECTED":unlocked?"SELECT CAR":"UNLOCK CAR"}
+    </button>
+   </div>
+  `;
+ }
+
+ careerContent.innerHTML=html;
+}
+
+window.selectCareerCar=function(id){
+ const c=carCollection.find(x=>x.id===id);
+ if(!c)return;
+
+ if(!career.unlockedCars.includes(id)){
+  if(career.coins<c.price){
+   alert("Not enough coins!");
+   return;
+  }
+
+  if(career.level<c.level){
+   alert("Required level not reached!");
+   return;
+  }
+
+  career.coins-=c.price;
+  career.unlockedCars.push(id);
+ }
+
+ career.selectedCar=id;
+ applyCarColor();
+ saveCareer();
+ showGarage();
+};
+
+// ================ MISSIONS SCREEN ================
+
+function showMissions(){
+ let html="<h2>🎯 CHALLENGING MISSIONS</h2>";
+
+ for(const m of missionList){
+  const progress=Math.min(m.target,missionProgress(m.id));
+  const completed=career.missions[m.id];
+
+  html+=`
+   <div class="career-row">
+    <strong>${m.name}</strong>
+    ${completed?"<span class='career-badge'> ✓ COMPLETED</span>":""}
+    <p><small>${m.description}</small></p>
+    <p><small>Progress: ${progress} / ${m.target}</small></p>
+    <p><small>Reward: ${m.reward} coins + ${m.xp} XP</small></p>
+   </div>
+  `;
+ }
+
+ careerContent.innerHTML=html;
+}
+
+// ================ ACHIEVEMENTS SCREEN ================
+
+function showAchievements(){
+ let html="<h2>🏆 ACHIEVEMENTS</h2>";
+
+ for(const a of achievementList){
+  const unlocked=career.achievements.includes(a.id);
+
+  html+=`
+   <div class="career-row">
+    <strong>${unlocked?"🏆":"🔒"} ${a.name}</strong>
+    <p><small>${a.description}</small></p>
+    <p><small>Reward: ${a.reward} coins</small></p>
+    <p><small>${unlocked?"UNLOCKED":"LOCKED"}</small></p>
+   </div>
+  `;
+ }
+
+ careerContent.innerHTML=html;
+}
+
+// ================ MENU BUTTONS ================
+
+document.getElementById("playRace").onclick=()=>{
+ startRace();
+};
+
+document.getElementById("garageBtn").onclick=showGarage;
+document.getElementById("missionsBtn").onclick=showMissions;
+document.getElementById("achieveBtn").onclick=showAchievements;
+
+showCareerMenu();
+// ================ RACE STATE ================
+
+const state={
+ running:false,
+ paused:false,
+ over:false,
+ finished:false,
+ speed:0,
+ maxSpeed:190,
+ score:0,
+ distance:0,
+ lap:1,
+ nitro:100,
+ angle:0,
+ trackT:0,
+ jumpY:0,
+ jumpVelocity:0,
+ jumps:0,
+ crashes:0,
+ obstaclesAvoided:0,
+ rampUsed:false,
+ cleanRace:true,
+ lastDistanceReward:0,
+ lastObstacleReward:0,
+ raceStartTime:0
+};
+
+const keys={
+ left:false,
+ right:false,
+ accelerate:false,
+ brake:false,
+ nitro:false,
+ jump:false
+};
+
+let lastTime=performance.now();
+let lapDistance=0;
+let totalRaceDistance=0;
+
+// ================ SCORE SYSTEM ================
+
+function addPoints(amount,label){
+ state.score+=amount;
+ document.getElementById("score").textContent=state.score;
+
+ if(label)showMessage(label);
+
+ if(state.score<=-900){
+  endRace(false);
+ }
+}
+
+// ================ RESET RACE ================
+
+function resetRace(){
+ state.running=false;
+ state.paused=false;
+ state.over=false;
+ state.finished=false;
+ state.speed=0;
+ state.score=0;
+ state.distance=0;
+ state.lap=1;
+ state.nitro=100;
+ state.angle=0;
+ state.trackT=0;
+ state.jumpY=0;
+ state.jumpVelocity=0;
+ state.jumps=0;
+ state.crashes=0;
+ state.obstaclesAvoided=0;
+ state.rampUsed=false;
+ state.cleanRace=true;
+ state.lastDistanceReward=0;
+ state.lastObstacleReward=0;
+
+ lapDistance=0;
+ totalRaceDistance=0;
+
+ for(const o of obstacles)o.hit=false;
+ for(const r of ramps)r.used=false;
+
+ document.getElementById("score").textContent="0";
+ document.getElementById("lap").textContent="1";
+ document.getElementById("distance").textContent="0";
+ document.getElementById("nitro").textContent="100";
+
+ const start=trackPosition(0,0);
+ car.position.set(start.position.x,0,start.position.z);
+ car.rotation.y=Math.atan2(start.tangent.x,start.tangent.z);
+
+ camera.position.set(
+  car.position.x,
+  7,
+  car.position.z-14
  );
- osc.connect(gain);
- gain.connect(masterGain);
- osc.start();
- osc.stop(audioContext.currentTime+duration);
+ camera.lookAt(car.position);
 }
 
-function musicTick(){
- if(!musicEnabled||!audioContext)return;
- const note=melody[musicStep%melody.length];
- playNote(note,.22,.055);
- if(musicStep%4===0)playNote(note/2,.3,.07,'sine');
- if(musicStep%4===2)playNote(90,.12,.04,'sine');
- musicStep++;
+// ================ START RACE ================
+
+function startRace(){
+ resetRace();
+
+ careerContent.innerHTML="";
+ document.getElementById("careerOverlay").style.display="none";
+ document.getElementById("gameUI").style.display="block";
+
+ state.running=true;
+ state.raceStartTime=performance.now();
+
+ showMessage("3... 2... 1... GO!");
 }
 
-function toggleMusic(){
- initAudio();
- if(!audioContext)return;
- audioContext.resume();
- musicEnabled=!musicEnabled;
+// ================ COLLISION ================
 
- document.getElementById('musicBtn').textContent=
-  musicEnabled?'♫ MUSIC: ON':'♫ MUSIC: OFF';
+function collision(){
+ if(state.over||state.finished)return;
 
- if(musicEnabled){
-  musicTick();
-  musicTimer=setInterval(musicTick,230);
+ state.crashes++;
+ state.cleanRace=false;
+ state.speed*=.45;
+
+ addPoints(-100,"CRASH! -100");
+
+ if(state.score>-900){
+  showMessage("COLLISION! DRIVE CAREFULLY");
+ }
+}
+
+// ================ JUMP ================
+
+function performJump(){
+ if(state.jumpY>0||state.over||state.finished)return;
+
+ state.jumpVelocity=11;
+ state.jumps++;
+
+ career.totalJumps++;
+ addPoints(25,"PERFECT JUMP +25");
+
+ checkMissions();
+ checkAchievements();
+}
+
+// ================ DISTANCE REWARDS ================
+
+function updateDistanceRewards(){
+ const current=Math.floor(totalRaceDistance);
+
+ if(current-state.lastDistanceReward>=500){
+  state.lastDistanceReward+=500;
+  addPoints(10,"DISTANCE BONUS +10");
+ }
+}
+
+// ================ RAMP DETECTION ================
+
+function checkRamps(){
+ for(const r of ramps){
+  if(r.used)continue;
+
+  const d=car.position.distanceTo(r.position);
+
+  if(d<5&&state.speed>65){
+   r.used=true;
+   state.jumpVelocity=12;
+   state.jumps++;
+   career.totalJumps++;
+
+   addPoints(75,"RAMP JUMP +75");
+
+   checkMissions();
+   checkAchievements();
+  }
+ }
+}
+
+// ================ OBSTACLE DETECTION ================
+
+function checkObstacles(){
+ for(const o of obstacles){
+  const d=car.position.distanceTo(o.position);
+
+  if(d<3.1&&!o.hit){
+   o.hit=true;
+   collision();
+  }
+
+  if(d>8&&d<13&&!o.hit){
+   o.hit=true;
+   state.obstaclesAvoided++;
+   career.totalObstacles++;
+
+   addPoints(150,"OBSTACLE CLEARED +150");
+
+   checkMissions();
+   checkAchievements();
+  }
+ }
+}
+
+// ================ LAP DETECTION ================
+
+function checkLap(){
+ if(state.trackT>=1){
+  state.trackT-=1;
+  state.lap++;
+
+  if(state.lap>3){
+   endRace(true);
+   return;
+  }
+
+  document.getElementById("lap").textContent=state.lap;
+  addPoints(100,"LAP COMPLETED +100");
+ }
+}
+
+// ================ RACE END ================
+
+function endRace(won){
+ if(state.over||state.finished)return;
+
+ state.running=false;
+ state.over=true;
+ state.finished=won;
+
+ if(won){
+  career.totalRaces++;
+  career.totalWins++;
+
+  if(state.cleanRace){
+   career.cleanRaces++;
+  }
+
+  const raceCoins=300;
+  const scoreCoins=Math.max(0,Math.floor(state.score/100));
+  const distanceCoins=Math.floor(totalRaceDistance/100);
+
+  const bonus=state.cleanRace?200:0;
+  const totalCoins=raceCoins+scoreCoins+distanceCoins+bonus;
+
+  addCoins(totalCoins);
+  addXP(200+Math.floor(state.score/10));
+
+  career.bestScore=Math.max(career.bestScore,state.score);
+  career.totalDistance+=Math.floor(totalRaceDistance);
+
+  checkMissions();
+  checkAchievements();
+  saveCareer();
+
+  careerContent.innerHTML=`
+   <h2>🏁 RACE COMPLETED!</h2>
+   <div class="career-row">
+    <strong>3 LAPS COMPLETED</strong><br>
+    Score: ${state.score}<br>
+    Race Reward: ${raceCoins} coins<br>
+    Score Bonus: ${scoreCoins} coins<br>
+    Distance Bonus: ${distanceCoins} coins<br>
+    Clean Race Bonus: ${bonus} coins<br>
+    <h2>🪙 TOTAL: ${totalCoins} COINS</h2>
+    ⭐ XP EARNED
+   </div>
+  `;
+
  }else{
-  clearInterval(musicTimer);
+  careerContent.innerHTML=`
+   <h2>💥 GAME OVER</h2>
+   <div class="career-row">
+    You could not finish all 3 laps.<br>
+    Final Score: ${state.score}<br>
+    No race completion reward.
+   </div>
+  `;
  }
+
+ document.getElementById("careerSubtitle").textContent=
+  won?"LEGENDARY PERFORMANCE!":"TRY AGAIN, RACER!";
+
+ document.getElementById("careerOverlay").style.display="flex";
+ document.getElementById("gameUI").style.display="none";
+
+ const buttons=document.querySelector(".career-buttons");
+
+ buttons.innerHTML=`
+  <button id="againBtn">🔄 PLAY AGAIN</button>
+  <button id="menuBtn">🏠 MAIN MENU</button>
+  <button id="resultGarage">🚘 GARAGE</button>
+ `;
+
+ document.getElementById("againBtn").onclick=startRace;
+
+ document.getElementById("menuBtn").onclick=()=>{
+  showCareerMenu();
+ };
+
+ document.getElementById("resultGarage").onclick=showGarage;
+
+ updateCareerStats();
 }
-document.getElementById('musicBtn').addEventListener('click',toggleMusic);
+// ================ KEYBOARD CONTROLS ================
 
-// Browser requires user interaction before sound can play.
-window.addEventListener('pointerdown',()=>{
- initAudio();
-},{once:true});
+const keyMap={
+ ArrowLeft:"left",
+ KeyA:"left",
+ ArrowRight:"right",
+ KeyD:"right",
+ ArrowUp:"accelerate",
+ KeyW:"accelerate",
+ ArrowDown:"brake",
+ KeyS:"brake",
+ Space:"jump",
+ ShiftLeft:"nitro",
+ ShiftRight:"nitro"
+};
 
-function playJumpSound(){
- if(!audioContext)return;
- const osc=audioContext.createOscillator();
- const gain=audioContext.createGain();
- osc.type='sine';
- osc.frequency.setValueAtTime(350,audioContext.currentTime);
- osc.frequency.exponentialRampToValueAtTime(
-  850,audioContext.currentTime+.2
- );
- gain.gain.setValueAtTime(.08,audioContext.currentTime);
- gain.gain.exponentialRampToValueAtTime(
-  .001,audioContext.currentTime+.3
- );
- osc.connect(gain);
- gain.connect(masterGain);
- osc.start();
- osc.stop(audioContext.currentTime+.3);
-}
+window.addEventListener("keydown",e=>{
+ const key=keyMap[e.code];
 
-function playCrashSound(){
- if(!audioContext)return;
- const osc=audioContext.createOscillator();
- const gain=audioContext.createGain();
- osc.type='sawtooth';
- osc.frequency.value=100;
- gain.gain.setValueAtTime(.12,audioContext.currentTime);
- gain.gain.exponentialRampToValueAtTime(
-  .001,audioContext.currentTime+.35
- );
- osc.connect(gain);
- gain.connect(masterGain);
- osc.start();
- osc.stop(audioContext.currentTime+.35);
-}
-
-function playNitroSound(){
- if(audioContext)playNote(150,.2,.08,'sawtooth');
-}
-// ================ CAR PHYSICS ================
-let previousJump=false;
-let collisionMessageTimer=0;
-let rampCooldown=0;
-
-function jumpCar(){
- if(!state.jumping&&state.speed>8){
-  state.jumping=true;
-  state.jumpVelocity=17;
-  playJumpSound();
-  showMessage('SUPER JUMP!');
+ if(key){
+  e.preventDefault();
+  keys[key]=true;
  }
-}
+
+ if(e.code==="Escape"&&state.running){
+  state.paused=!state.paused;
+  showMessage(state.paused?"PAUSED":"RACE RESUMED");
+ }
+});
+
+window.addEventListener("keyup",e=>{
+ const key=keyMap[e.code];
+ if(key)keys[key]=false;
+});
+
+// ================ MOBILE CONTROLS ================
+
+document.querySelectorAll(".control").forEach(btn=>{
+ const key=btn.dataset.key;
+
+ btn.addEventListener("pointerdown",e=>{
+  e.preventDefault();
+  keys[key]=true;
+ });
+
+ const release=()=>{
+  keys[key]=false;
+ };
+
+ btn.addEventListener("pointerup",release);
+ btn.addEventListener("pointerleave",release);
+ btn.addEventListener("pointercancel",release);
+});
+
+// ================ CAR MOVEMENT ================
+
+const TRACK_LENGTH=2*Math.PI*Math.sqrt(
+ (TRACK_A*TRACK_A+TRACK_B*TRACK_B)/2
+);
+
+let steeringOffset=0;
+let lastJumpState=false;
 
 function updatePhysics(dt){
- // Acceleration
- if(input.accelerate)state.speed+=28*dt;
- else state.speed-=5*dt;
 
- // Braking
- if(input.brake)state.speed-=45*dt;
+ if(!state.running||state.paused)return;
+
+ // Acceleration
+ if(keys.accelerate){
+  state.speed+=85*dt;
+ }else{
+  state.speed-=22*dt;
+ }
+
+ // Brake
+ if(keys.brake){
+  state.speed-=110*dt;
+ }
 
  // Nitro
- if(input.nitro&&state.nitro>0&&state.speed>10){
-  state.speed+=45*dt;
-  state.nitro=Math.max(0,state.nitro-28*dt);
-  if(Math.random()<.08)playNitroSound();
+ if(keys.nitro&&state.nitro>0&&state.speed>20){
+  state.speed+=100*dt;
+  state.nitro-=35*dt;
  }else{
-  state.nitro=Math.min(100,state.nitro+9*dt);
+  state.nitro+=12*dt;
  }
 
- state.speed=clamp(state.speed,0,state.maxSpeed);
+ state.nitro=Math.max(0,Math.min(100,state.nitro));
+ state.speed=Math.max(0,Math.min(state.maxSpeed,state.speed));
 
- // Smooth steering
- const steerTarget=(input.right?1:0)-(input.left?1:0);
- state.steer=lerp(state.steer,steerTarget,Math.min(1,dt*7));
+ // Steering
+ if(keys.left)steeringOffset-=12*dt;
+ if(keys.right)steeringOffset+=12*dt;
 
- // Actual left-right road movement
- const speedFactor=.35+(state.speed/state.maxSpeed)*.9;
- state.lateral+=state.steer*22*speedFactor*dt;
- state.lateral=clamp(state.lateral,-7,7);
+ steeringOffset*=Math.pow(.92,dt*60);
+ steeringOffset=Math.max(-7,Math.min(7,steeringOffset));
 
- // Forward movement along curved track
- const circumference=2*Math.PI*((TRACK_A+TRACK_B)/2);
- state.progress+=state.speed*dt/circumference;
-
- if(state.progress>=1){
-  state.progress-=1;
-  state.lap++;
+ // Jump
+ if(keys.jump&&!lastJumpState){
+  performJump();
  }
 
- state.distance+=state.speed*dt;
+ lastJumpState=keys.jump;
 
- // Jump once per button press
- if(input.jump&&!previousJump)jumpCar();
- previousJump=input.jump;
+ // Jump physics
+ if(state.jumpY>0||state.jumpVelocity>0){
+  state.jumpY+=state.jumpVelocity*dt;
+  state.jumpVelocity-=25*dt;
 
- // Gravity
- if(state.jumping){
-  state.jumpHeight+=state.jumpVelocity*dt;
-  state.jumpVelocity-=30*dt;
-
-  if(state.jumpHeight<=0){
-   state.jumpHeight=0;
+  if(state.jumpY<0){
+   state.jumpY=0;
    state.jumpVelocity=0;
-   state.jumping=false;
-   showMessage('PERFECT LANDING!');
+   addPoints(50,"LANDING BONUS +50");
   }
  }
-}
 
-// ================ AUTOMATIC RAMP DETECTION ================
-function checkRamp(dt){
- rampCooldown=Math.max(0,rampCooldown-dt);
+ // Move around track
+ const movement=state.speed*dt;
 
- if(state.jumping||rampCooldown>0||state.speed<12)return;
+ state.distance+=movement;
+ totalRaceDistance+=movement;
+ lapDistance+=movement;
 
- for(const ramp of ramps){
-  let d=Math.abs(state.progress-ramp.progress);
-  d=Math.min(d,1-d);
+ state.trackT+=movement/TRACK_LENGTH;
 
-  if(d<.006&&Math.abs(state.lateral)<5.5){
-   state.jumping=true;
-   state.jumpVelocity=18;
-   rampCooldown=1.5;
-   playJumpSound();
-   showMessage('RAMP JUMP!');
-   break;
-  }
- }
-}
+ // Update car position
+ const track=trackPosition(state.trackT,steeringOffset);
 
-// ================ OBSTACLE COLLISION ================
-function checkObstacleCollision(dt){
- collisionMessageTimer=Math.max(0,collisionMessageTimer-dt);
-
- for(const obstacle of obstacles){
-  let d=Math.abs(state.progress-obstacle.progress);
-  d=Math.min(d,1-d);
-
-  const nearObstacle=d<.006;
-  const sameLane=Math.abs(state.lateral-obstacle.lane)<3.3;
-
-  // Car must jump high enough to cross the obstacle.
-  const cleared=state.jumpHeight>=2.2;
-
-  if(
-   nearObstacle&&sameLane&&!cleared&&
-   obstacle.hitLap!==state.lap
-  ){
-   obstacle.hitLap=state.lap;
-
-   state.speed*=.25;
-   deductPoints(100);
-   playCrashSound();
-
-   collisionMessageTimer=1.5;
-
-   // Small impact shake
-   car.rotation.z+=.15;
-   break;
-  }
- }
-}
-
-// ================ CAR POSITION AND ROTATION ================
-function updateCarPosition(dt){
- const track=trackPosition(state.progress,state.lateral);
-
- car.position.copy(track.position);
- car.position.y=.1+state.jumpHeight;
-
- const heading=Math.atan2(track.tangent.x,track.tangent.z);
- car.rotation.y=heading;
-
- // Cornering lean
- const targetLean=-state.steer*.16;
- car.rotation.z=lerp(
-  car.rotation.z,targetLean,Math.min(1,dt*5)
+ car.position.set(
+  track.position.x,
+  state.jumpY,
+  track.position.z
  );
 
- // Suspension
- car.position.y+=Math.sin(performance.now()*.012)*.025;
+ car.rotation.y=Math.atan2(
+  track.tangent.x,
+  track.tangent.z
+ );
+
+ car.rotation.z=-steeringOffset*.025;
 
  // Wheel rotation
- for(const wheel of wheels){
-  wheel.rotation.x-=state.speed*dt*.12;
- }
+ wheels.forEach(w=>{
+  w.rotation.x+=movement*.15;
+ });
 
- // Front wheel steering
- wheels[0].rotation.y=state.steer*.35;
- wheels[1].rotation.y=state.steer*.35;
+ // Check gameplay objects
+ checkRamps();
+ checkObstacles();
+ checkLap();
+
+ // Distance reward
+ updateDistanceRewards();
+
+ // UI
+ document.getElementById("speed").innerHTML=
+  Math.floor(state.speed)+" <span style='font-size:12px'>KM/H</span>";
+
+ document.getElementById("distance").textContent=
+  Math.floor(totalRaceDistance);
+
+ document.getElementById("nitro").textContent=
+  Math.floor(state.nitro);
+
+ document.getElementById("lap").textContent=
+  Math.min(state.lap,3);
 }
 
 // ================ CHASE CAMERA ================
-const cameraTarget=new THREE.Vector3();
-const desiredCamera=new THREE.Vector3();
 
 function updateCamera(dt){
- const behind=new THREE.Vector3(0,6.5,-13);
- behind.applyAxisAngle(
-  new THREE.Vector3(0,1,0),car.rotation.y
+
+ const behind=new THREE.Vector3(
+  -Math.sin(car.rotation.y)*13,
+  6,
+  -Math.cos(car.rotation.y)*13
  );
 
- desiredCamera.copy(car.position).add(behind);
- camera.position.lerp(
-  desiredCamera,Math.min(1,dt*4)
- );
+ const target=car.position.clone().add(behind);
 
- cameraTarget.copy(car.position);
- cameraTarget.y+=1.5+state.jumpHeight*.15;
- camera.lookAt(cameraTarget);
+ camera.position.lerp(target,Math.min(1,dt*4));
+
+ const lookTarget=car.position.clone();
+ lookTarget.y+=2;
+
+ camera.lookAt(lookTarget);
 }
 
-// ================ NITRO PARTICLES ================
-const particles=[];
-const particleMat=new THREE.MeshBasicMaterial({
- color:0x00eaff,transparent:true,opacity:.75
-});
+// ================ RAIN ANIMATION ================
 
-function createParticle(){
- const mesh=new THREE.Mesh(
-  new THREE.SphereGeometry(.07,6,6),
-  particleMat
- );
- scene.add(mesh);
- particles.push({mesh,life:.7});
-}
+function updateRain(dt){
 
-function updateParticles(dt){
- if(input.nitro&&state.speed>20&&Math.random()<.7){
-  createParticle();
- }
+ const positions=rain.geometry.attributes.position.array;
 
- for(let i=particles.length-1;i>=0;i--){
-  const p=particles[i];
-  p.life-=dt;
+ for(let i=0;i<rainCount;i++){
+  positions[i*3+1]-=35*dt;
 
-  p.mesh.position.x+=(Math.random()-.5)*dt*3;
-  p.mesh.position.z-=dt*state.speed*.15;
-  p.mesh.position.y+=dt*1.5;
-  p.mesh.scale.multiplyScalar(.98);
-
-  if(p.life<=0){
-   scene.remove(p.mesh);
-   p.mesh.geometry.dispose();
-   particles.splice(i,1);
+  if(positions[i*3+1]<0){
+   positions[i*3+1]=45;
   }
  }
+
+ rain.geometry.attributes.position.needsUpdate=true;
+
+ rain.position.x=car.position.x;
+ rain.position.z=car.position.z;
 }
 
-// ================ ENGINE SOUND ================
-function updateEngineSound(){
- if(!audioContext||!engineOsc)return;
+// ================ MUSIC SYSTEM ================
 
- engineOsc.frequency.setTargetAtTime(
-  45+state.speed*3,
-  audioContext.currentTime,.08
+let audioContext=null;
+let musicOn=false;
+let musicTimer=null;
+
+function playMusicNote(){
+
+ if(!audioContext||!musicOn)return;
+
+ const frequencies=[
+  110,146.83,164.81,220,
+  196,164.81,146.83,130.81
+ ];
+
+ const frequency=frequencies[
+  Math.floor(Math.random()*frequencies.length)
+ ];
+
+ const osc=audioContext.createOscillator();
+ const gain=audioContext.createGain();
+
+ osc.type="sawtooth";
+ osc.frequency.value=frequency;
+
+ gain.gain.setValueAtTime(.025,audioContext.currentTime);
+ gain.gain.exponentialRampToValueAtTime(
+  .001,audioContext.currentTime+.22
  );
 
- engineGain.gain.setTargetAtTime(
-  .015+(state.speed/state.maxSpeed)*.055,
-  audioContext.currentTime,.08
- );
+ osc.connect(gain);
+ gain.connect(audioContext.destination);
+
+ osc.start();
+ osc.stop(audioContext.currentTime+.23);
 }
 
-// ================ HUD UPDATE ================
-function updateHUD(){
- document.getElementById('speed').innerHTML=
-  `${Math.round(state.speed*3.6).toString().padStart(3,'0')} <span style="font-size:12px">KM/H</span>`;
+function toggleMusic(){
 
- document.getElementById('score').textContent=state.score;
- document.getElementById('lap').textContent=state.lap;
- document.getElementById('distance').textContent=
-  Math.floor(state.distance);
- document.getElementById('nitro').textContent=
-  Math.round(state.nitro);
+ if(!audioContext){
+  audioContext=new(window.AudioContext||window.webkitAudioContext)();
+ }
 
- document.getElementById('status').textContent=
-  collisionMessageTimer>0?'OBSTACLE HIT!':
-  state.jumping?'AIRBORNE!':
-  input.nitro&&state.nitro>0?'NITRO BOOST':
-  state.steer!==0?'STEERING':'RACING';
+ audioContext.resume();
+
+ musicOn=!musicOn;
+
+ document.getElementById("musicBtn").textContent=
+  musicOn?"♫ MUSIC: ON":"♫ MUSIC: OFF";
+
+ if(musicOn){
+  if(musicTimer)clearInterval(musicTimer);
+
+  musicTimer=setInterval(playMusicNote,250);
+ }else{
+  clearInterval(musicTimer);
+  musicTimer=null;
+ }
 }
 
-// ================ FINAL GAME LOOP ================
-const clock=new THREE.Clock();
-let running=true;
+document.getElementById("musicBtn").onclick=toggleMusic;
+
+// ================ GAME LOOP ================
 
 function animate(){
- if(!running)return;
 
  requestAnimationFrame(animate);
 
- const dt=Math.min(clock.getDelta(),.035);
+ const now=performance.now();
 
- updatePhysics(dt);
- checkRamp(dt);
- checkObstacleCollision(dt);
- updateCarPosition(dt);
- updateCamera(dt);
- updateParticles(dt);
- updateHUD();
- updateEngineSound();
+ const dt=Math.min((now-lastTime)/1000,.05);
+ lastTime=now;
 
- neonLight.intensity=input.nitro?110:65;
+ if(state.running&&!state.paused){
+  updatePhysics(dt);
+  updateCamera(dt);
+ }
+
+ updateRain(dt);
 
  renderer.render(scene,camera);
 }
-animate();
 
 // ================ RESIZE ================
-window.addEventListener('resize',()=>{
+
+window.addEventListener("resize",()=>{
  camera.aspect=innerWidth/innerHeight;
  camera.updateProjectionMatrix();
+
  renderer.setSize(innerWidth,innerHeight);
 });
 
-// ================ CLEANUP ================
-window.addEventListener('beforeunload',()=>{
- running=false;
- clearInterval(musicTimer);
- renderer.dispose();
-});
+// ================ START RENDERING ================
+
+animate();
 
 } // END OF startGame()
+
 </script>
 </body>
 </html>
